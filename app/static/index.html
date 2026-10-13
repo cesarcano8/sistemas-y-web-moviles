@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Productos | Salsamentaria</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous">
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg bg-white border-bottom">
+      <div class="container">
+        <a class="navbar-brand fw-semibold" href="/">Salsamentaria</a>
+        <span class="navbar-text">Catálogo de productos</span>
+      </div>
+    </nav>
+
+    <main class="container py-4 py-lg-5">
+      <div class="mb-4">
+        <h1 class="h3 mb-1">Productos</h1>
+        <p class="text-secondary mb-0">Inventario consultado desde Oracle APEX.</p>
+      </div>
+
+      <div id="mensaje" class="alert d-none" role="alert"></div>
+
+      <section class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" class="ps-3">Código</th>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Descripción</th>
+                  <th scope="col">Categoría</th>
+                  <th scope="col">Proveedor</th>
+                  <th scope="col" class="text-end">Compra</th>
+                  <th scope="col" class="text-end">Venta</th>
+                  <th scope="col" class="text-end">Stock</th>
+                  <th scope="col" class="text-end">Mínimo</th>
+                  <th scope="col" class="pe-3">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="lista-productos">
+                <tr>
+                  <td colspan="10" class="text-center text-secondary py-4">Cargando productos...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer bg-white text-secondary small" id="total-productos"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

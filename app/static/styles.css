@@ -1,0 +1,11 @@
+body {
+  background-color: #f6f8fb;
+}
+
+.navbar-brand {
+  letter-spacing: -0.02em;
+}
+
+table th {
+  white-space: nowrap;
+}

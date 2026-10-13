@@ -1,0 +1,8 @@
+services:
+  api:
+    build: .
+    environment:
+      APEX_PRODUCTOS_URL: ${APEX_PRODUCTOS_URL:-https://oracleapex.com/ords/proyecto_salsamentaria/productos/lista/}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
