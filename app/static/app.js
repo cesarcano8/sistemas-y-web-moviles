@@ -35,16 +35,15 @@ function agregarCelda(fila, texto, clase = "") {
 
 function crearFila(producto) {
   const fila = document.createElement("tr");
-  agregarCelda(fila, producto.codigo, "ps-3 text-secondary");
+  agregarCelda(fila, String(producto.id_producto), "ps-3 text-secondary");
   agregarCelda(fila, producto.nombre, "fw-medium");
-  agregarCelda(fila, producto.descripcion);
-  agregarCelda(fila, String(producto.id_categoria));
-  agregarCelda(fila, String(producto.id_proveedor));
-  agregarCelda(fila, formatoPrecio.format(producto.precio_compra), "text-end");
+  agregarCelda(fila, producto.categoria);
+  agregarCelda(fila, producto.proveedor);
+  agregarCelda(fila, producto.unidad);
   agregarCelda(fila, formatoPrecio.format(producto.precio_venta), "text-end");
-  agregarCelda(fila, String(producto.stock), "text-end");
+  agregarCelda(fila, String(producto.stock_actual), "text-end");
   agregarCelda(fila, String(producto.stock_minimo), "text-end");
-  agregarCelda(fila, producto.estado, "pe-3");
+  agregarCelda(fila, producto.activo ? "Activo" : "Inactivo", "pe-3");
   return fila;
 }
 
@@ -56,7 +55,7 @@ async function cargarProductos() {
     if (productos.length === 0) {
       const fila = document.createElement("tr");
       const celda = document.createElement("td");
-      celda.colSpan = 10;
+      celda.colSpan = 9;
       celda.className = "text-center text-secondary py-4";
       celda.textContent = "No hay productos disponibles.";
       fila.append(celda);

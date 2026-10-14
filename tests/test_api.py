@@ -1,138 +1,127 @@
-import httpx
+from contextlib import closing
+import sqlite3
+
 from fastapi.testclient import TestClient
+import pytest
 
-from app.apex import CatalogoProductos
-from app.main import APEX_PRODUCTOS_URL, crear_app
-
-
-PRODUCTO = {
-    "id_producto": 1,
-    "codigo": "QUES-001",
-    "nombre": "Queso campesino",
-    "descripcion": "Queso campesino de prueba",
-    "id_categoria": 1,
-    "id_proveedor": 1,
-    "precio_compra": 12000,
-    "precio_venta": 15000,
-    "stock": 27,
-    "stock_minimo": 5,
-    "estado": "A",
-}
+from app.database import inicializar_base_datos, obtener_ruta_esquema
+from app.ejecutar_sql import ejecutar_script
+from app.main import crear_app
 
 
-def crear_app_pruebas(cliente_http: httpx.Client) -> TestClient:
-    catalogo = CatalogoProductos(APEX_PRODUCTOS_URL, cliente_http)
-    return TestClient(crear_app(catalogo=catalogo))
-
-
-def test_inicio_y_archivos_estaticos():
-    def responder(request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET"
-        return httpx.Response(200, json={"items": []})
-
-    with httpx.Client(
-        transport=httpx.MockTransport(responder)
-    ) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente:
-            respuesta = cliente.get("/")
-            javascript = cliente.get("/static/app.js")
+def test_inicio_y_archivos_estaticos(tmp_path):
+    with TestClient(crear_app(tmp_path / "productos.db")) as cliente:
+        respuesta = cliente.get("/")
+        javascript = cliente.get("/static/app.js")
 
     assert respuesta.status_code == 200
     assert "Catálogo de productos" in respuesta.text
     assert "lista-productos" in respuesta.text
     assert respuesta.headers["content-type"].startswith("text/html")
+    assert respuesta.headers["cache-control"] == "no-cache, must-revalidate"
+    assert "/static/app.js?v=2" in respuesta.text
     assert javascript.status_code == 200
     assert 'solicitar("/productos")' in javascript.text
+    assert "producto.categoria" in javascript.text
+    assert "producto.stock_actual" in javascript.text
 
 
-def test_listar_productos_consulta_apex_sin_autenticacion():
-    productos = [PRODUCTO, {**PRODUCTO, "id_producto": 2, "codigo": "QUES-002"}]
+def test_base_nueva_crea_seis_tablas_y_devuelve_lista_vacia(tmp_path):
+    ruta_base_datos = tmp_path / "productos.db"
 
-    def responder(request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET"
-        assert str(request.url) == APEX_PRODUCTOS_URL
-        assert "Authorization" not in request.headers
-        return httpx.Response(
-            200,
-            json={
-                "items": productos,
-                "hasMore": False,
-                "limit": 25,
-                "offset": 0,
-                "count": len(productos),
-            },
-        )
-
-    with httpx.Client(transport=httpx.MockTransport(responder)) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente:
-            respuesta = cliente.get("/productos")
+    with TestClient(crear_app(ruta_base_datos)) as cliente:
+        respuesta = cliente.get("/productos")
 
     assert respuesta.status_code == 200
-    assert respuesta.json() == productos
+    assert respuesta.json() == []
+    with closing(sqlite3.connect(ruta_base_datos)) as conexion:
+        tablas = {
+            fila[0]
+            for fila in conexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+    assert {"roles", "usuarios", "categorias", "proveedores", "productos", "movimientos"} <= tablas
 
 
-def test_respuesta_apex_sin_items_devuelve_error_gateway():
-    def responder(request: httpx.Request) -> httpx.Response:
-        assert request.url == httpx.URL(APEX_PRODUCTOS_URL)
-        return httpx.Response(200, json={"hasMore": False})
+def test_script_de_datos_sql_alimenta_la_api_desde_sqlite(tmp_path):
+    ruta_base_datos = tmp_path / "productos.db"
+    ruta_datos = obtener_ruta_esquema().parent / "productos.sql"
+    ejecutar_script(ruta_datos, ruta_base_datos)
 
-    with httpx.Client(
-        transport=httpx.MockTransport(responder)
-    ) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente_http_api:
-            respuesta = cliente_http_api.get("/productos")
+    with TestClient(crear_app(ruta_base_datos)) as cliente:
+        respuesta = cliente.get("/productos")
 
-    assert respuesta.status_code == 502
-    assert respuesta.json() == {
-        "detail": "APEX debe devolver una lista de productos en 'items'"
+    assert respuesta.status_code == 200
+    productos = respuesta.json()
+    assert len(productos) == 8
+    queso = next(producto for producto in productos if producto["nombre"] == "Queso campesino")
+    assert queso == {
+        "id_producto": 4,
+        "nombre": "Queso campesino",
+        "categoria": "Quesos",
+        "proveedor": "Lácteos La Pradera",
+        "unidad": "KG",
+        "precio_venta": 24000,
+        "stock_actual": 15.75,
+        "stock_minimo": 6,
+        "activo": True,
     }
 
 
-def test_error_http_de_apex_se_expone_como_error_gateway():
-    def responder(request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET"
-        assert request.url == httpx.URL(APEX_PRODUCTOS_URL)
-        return httpx.Response(503)
+def test_claves_foraneas_rechazan_categoria_inexistente(tmp_path):
+    ruta_base_datos = tmp_path / "productos.db"
+    ruta_script = tmp_path / "producto_invalido.sql"
+    ruta_script.write_text(
+        """
+        INSERT INTO productos (
+            nombre, id_categoria, id_proveedor, unidad, precio_venta
+        ) VALUES ('Producto inválido', 99, 99, 'UND', 1000);
+        """,
+        encoding="utf-8",
+    )
 
-    with httpx.Client(
-        transport=httpx.MockTransport(responder)
-    ) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente_http_api:
-            respuesta = cliente_http_api.get("/productos")
-
-    assert respuesta.status_code == 502
-    assert respuesta.json() == {"detail": "APEX respondió con el estado HTTP 503"}
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        ejecutar_script(ruta_script, ruta_base_datos)
 
 
-def test_error_de_conexion_apex_expone_el_motivo():
-    def responder(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError(
-            "[Errno -3] Temporary failure in name resolution",
-            request=request,
+def test_migra_tabla_antigua_vacia(tmp_path):
+    ruta_base_datos = tmp_path / "productos.db"
+    with sqlite3.connect(ruta_base_datos) as conexion:
+        conexion.execute(
+            """
+            CREATE TABLE productos (
+                id_producto INTEGER PRIMARY KEY,
+                codigo TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT NOT NULL,
+                id_categoria INTEGER NOT NULL,
+                id_proveedor INTEGER NOT NULL,
+                precio_compra REAL NOT NULL,
+                precio_venta REAL NOT NULL,
+                stock INTEGER NOT NULL,
+                stock_minimo INTEGER NOT NULL,
+                estado TEXT NOT NULL
+            )
+            """
         )
 
-    with httpx.Client(transport=httpx.MockTransport(responder)) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente_http_api:
-            respuesta = cliente_http_api.get("/productos")
+    inicializar_base_datos(ruta_base_datos)
+    with closing(sqlite3.connect(ruta_base_datos)) as conexion:
+        columnas = {
+            fila[1] for fila in conexion.execute("PRAGMA table_info(productos)")
+        }
 
-    assert respuesta.status_code == 502
-    assert respuesta.json() == {
-        "detail": (
-            "No fue posible conectarse con APEX: "
-            "[Errno -3] Temporary failure in name resolution"
+    assert {"unidad", "stock_actual", "activo"} <= columnas
+
+
+def test_migracion_no_descarta_productos_de_la_tabla_antigua(tmp_path):
+    ruta_base_datos = tmp_path / "productos.db"
+    with sqlite3.connect(ruta_base_datos) as conexion:
+        conexion.execute(
+            "CREATE TABLE productos (id_producto INTEGER PRIMARY KEY, unidad TEXT)"
         )
-    }
+        conexion.execute("INSERT INTO productos (id_producto, unidad) VALUES (1, 'KG')")
 
-
-def test_tiempo_de_espera_de_apex_devuelve_gateway_timeout():
-    def responder(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("timeout", request=request)
-
-    with httpx.Client(transport=httpx.MockTransport(responder)) as cliente_http:
-        with crear_app_pruebas(cliente_http) as cliente_http_api:
-            respuesta = cliente_http_api.get("/productos")
-
-    assert respuesta.status_code == 504
-    assert respuesta.json() == {
-        "detail": "Se agotó el tiempo de espera al consultar APEX"
-    }
+    with pytest.raises(RuntimeError, match="contiene productos del esquema anterior"):
+        inicializar_base_datos(ruta_base_datos)

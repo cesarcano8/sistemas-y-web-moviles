@@ -2,7 +2,10 @@ services:
   api:
     build: .
     environment:
-      APEX_PRODUCTOS_URL: ${APEX_PRODUCTOS_URL:-https://oracleapex.com/ords/proyecto_salsamentaria/productos/lista/}
+      DATABASE_PATH: ${DATABASE_PATH:-/data/productos.db}
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./sql:/app/sql:ro
     restart: unless-stopped

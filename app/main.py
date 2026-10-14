@@ -1,50 +1,30 @@
 from contextlib import asynccontextmanager
-import os
 from pathlib import Path
-from typing import Annotated
 
-import httpx
-from fastapi import Depends, FastAPI, Response
+from fastapi import FastAPI, Response
 from fastapi.requests import Request
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 
-from app.apex import CatalogoProductos, ErrorApex
+from app.database import (
+    inicializar_base_datos,
+    listar_productos,
+    obtener_ruta_base_datos,
+)
 from app.schemas import Producto
 
-APEX_PRODUCTOS_URL = (
-    "https://oracleapex.com/ords/proyecto_salsamentaria/productos/lista/"
-)
 
+def crear_app(database_path: str | Path | None = None) -> FastAPI:
+    ruta_base_datos = (
+        Path(database_path) if database_path is not None else obtener_ruta_base_datos()
+    )
 
-def crear_app(catalogo: CatalogoProductos | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        cliente_http = None
-        if catalogo is not None:
-            app.state.catalogo = catalogo
-        else:
-            url = os.getenv("APEX_PRODUCTOS_URL", APEX_PRODUCTOS_URL)
-            cliente_http = httpx.Client(timeout=10)
-            app.state.catalogo = CatalogoProductos(url, cliente_http)
-
-        try:
-            yield
-        finally:
-            if cliente_http is not None:
-                cliente_http.close()
+        inicializar_base_datos(ruta_base_datos)
+        app.state.database_path = ruta_base_datos
+        yield
 
     app = FastAPI(title="Catálogo de productos", version="1.0.0", lifespan=lifespan)
-
-    @app.exception_handler(ErrorApex)
-    async def manejar_error_apex(_request: Request, error: ErrorApex):
-        del _request
-        return JSONResponse(
-            status_code=error.status_code,
-            content={"detail": str(error)},
-        )
-
     app.mount(
         "/static",
         StaticFiles(directory=Path(__file__).parent / "static"),
@@ -54,25 +34,16 @@ def crear_app(catalogo: CatalogoProductos | None = None) -> FastAPI:
     return app
 
 
-def obtener_catalogo(request: Request) -> CatalogoProductos:
-    return request.app.state.catalogo
-
-
-Catalogo = Annotated[CatalogoProductos, Depends(obtener_catalogo)]
-
-
 def inicio():
     return Response(
         content=(Path(__file__).parent / "static" / "index.html").read_text(),
         media_type="text/html",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
     )
 
 
-def obtener_productos(catalogo: Catalogo):
-    try:
-        return [Producto.model_validate(producto) for producto in catalogo.listar()]
-    except ValidationError as error:
-        raise ErrorApex("APEX devolvió un producto con campos inválidos") from error
+def obtener_productos(request: Request) -> list[Producto]:
+    return listar_productos(request.app.state.database_path)
 
 
 def registrar_rutas(app: FastAPI):

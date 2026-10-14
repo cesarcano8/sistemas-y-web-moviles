@@ -1,18 +1,19 @@
-# Catálogo de productos con FastAPI y Docker
+# Catálogo de productos con FastAPI, SQLite y Docker
 
-Aplicación web de solo lectura para consultar los productos publicados por Oracle APEX. FastAPI consume el endpoint público y presenta el inventario en una tabla adaptable.
+Aplicación web de solo lectura para consultar un catálogo guardado localmente en SQLite. La página y la API no dependen de una conexión en vivo con Oracle APEX.
 
 ## Componentes
 
-- FastAPI y Pydantic: API y validación de la respuesta.
-- Oracle APEX/ORDS: endpoint HTTP público de productos, sin autenticación.
+- FastAPI y Pydantic: API y validación de productos.
+- SQLite: almacenamiento local persistente con seis tablas relacionadas.
 - Bootstrap: interfaz web adaptable a móvil y escritorio.
-- Docker Compose: ejecuta la aplicación.
+- Docker Compose: ejecuta la aplicación y conserva la base en `data/productos.db`.
 - pytest y httpx: pruebas HTTP de la API.
 
 ## Requisitos
 
 - Python 3.11 o superior, o Docker.
+- Para Docker en Windows: Docker Desktop iniciado y con el motor de contenedores Linux listo.
 
 ## Ejecutar localmente
 
@@ -30,19 +31,36 @@ Aplicación web de solo lectura para consultar los productos publicados por Orac
    uvicorn app.main:app --reload
    ```
 
+   SQLite crea automáticamente las tablas definidas en `sql/esquema.sql` dentro de `data/productos.db`.
+
 3. Abrir `http://localhost:8000` para ver el catálogo o `/docs` para la documentación interactiva.
 
 ## Ejecutar con Docker
 
-```bash
-docker compose up --build
+En Windows, abre Docker Desktop y espera a que indique que el motor está en ejecución. En PowerShell, desde la carpeta del proyecto:
+
+```powershell
+docker compose up --build -d
+docker compose ps
 ```
 
-Abre `http://localhost:8000` para ver el catálogo y `http://localhost:8000/docs` para la documentación interactiva. Bootstrap se carga desde jsDelivr y requiere acceso a internet desde el navegador. El servidor también necesita acceso al endpoint de APEX.
+La base de datos se guarda en `data/productos.db` en el proyecto y sobrevive a la recreación del contenedor. Abre `http://localhost:8000` para ver el catálogo y `http://localhost:8000/docs` para la documentación interactiva. Usa `docker compose logs -f api` para ver los registros y `docker compose down` para detener la aplicación. Las claves foráneas se validan en SQLite.
 
-## Configurar APEX
+Bootstrap se carga desde jsDelivr y requiere acceso a internet desde el navegador. La API no consulta Oracle APEX.
 
-La URL del endpoint de prueba ya está configurada como predeterminada. Para cambiarla, copia `.env.example` a `.env` y modifica `APEX_PRODUCTOS_URL`. No se requiere token ni credenciales de base de datos. Consulta [`docs/apex.md`](docs/apex.md) para el contrato de respuesta.
+## Cargar productos
+
+`sql/esquema.sql` define los seis objetos de la base: roles, usuarios, categorías, proveedores, productos y movimientos. Se ejecuta automáticamente al iniciar la aplicación.
+
+Para cargar los datos de ejemplo, ejecuta una sola vez el script SQLite `sql/productos.sql`. Desde PowerShell, en la raíz del proyecto y con el contenedor en ejecución:
+
+```powershell
+docker compose exec api python -m app.ejecutar_sql /app/sql/productos.sql
+```
+
+El script se ejecuta contra `data/productos.db`. Si quieres cargar tu inventario real, edita sus sentencias `INSERT` antes de ejecutarlo. La tabla web muestra productos activos, incluyendo categoría, proveedor, unidad, precio de venta y stock. Consulta [`docs/sqlite.md`](docs/sqlite.md) para más detalles.
+
+Si ya existía una base de la versión previa y tenía productos, la aplicación no borra ni convierte automáticamente esos registros: detiene el arranque e indica que debes hacer una copia y migrarlos. La tabla antigua vacía se sustituye automáticamente por el nuevo esquema.
 
 ## Probar
 
@@ -50,12 +68,10 @@ La URL del endpoint de prueba ya está configurada como predeterminada. Para cam
 python -m pytest
 ```
 
-Las pruebas simulan la respuesta HTTP de APEX; no necesitan una base de datos ni acceso a internet.
+Las pruebas usan bases de datos temporales y no necesitan conexión a internet ni a APEX.
 
 ## Ruta de la API
 
 | Método | Ruta | Acción |
 | --- | --- | --- |
-| GET | `/productos` | Listar los productos recibidos de APEX |
-
-La guía [`docs/apex.md`](docs/apex.md) describe la integración con el endpoint de Oracle APEX/ORDS.
+| GET | `/productos` | Listar los productos activos guardados en SQLite |
