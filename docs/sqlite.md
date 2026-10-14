@@ -26,3 +26,11 @@ Al volver a ejecutar el script de ejemplo, las claves primarias y restricciones 
 ## Diferencias con el modelo anterior de la API
 
 El catálogo actual usa las columnas que realmente define el modelo de inventario: nombre, categoría, proveedor, unidad, precio de venta, existencias, mínimo y activo. Ya no espera `codigo`, `descripcion` ni `precio_compra`, campos que no existen en la tabla Oracle del archivo original.
+
+## Operaciones de productos
+
+La página principal permite crear, listar, editar y eliminar productos. La API expone además `GET /productos/{id}`, `POST /productos`, `PUT /productos/{id}` y `DELETE /productos/{id}`. Los campos categoría y proveedor se eligen de los catálogos existentes; precio debe ser mayor que cero y stock no puede ser negativo.
+
+Un producto asociado a movimientos no se puede eliminar, para conservar el historial. En ese caso la API devuelve `409 Conflict`; se puede editar para marcarlo inactivo.
+
+La aplicación aún no tiene autenticación. Limita su uso a un entorno local o de confianza.

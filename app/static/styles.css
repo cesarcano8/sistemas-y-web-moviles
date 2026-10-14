@@ -9,3 +9,17 @@ body {
 table th {
   white-space: nowrap;
 }
+
+.dialogo-producto {
+  width: min(720px, calc(100% - 2rem));
+  max-width: none;
+  max-height: calc(100% - 2rem);
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+
+.dialogo-producto::backdrop {
+  background: rgb(15 23 42 / 55%);
+}

@@ -48,6 +48,8 @@ La base de datos se guarda en `data/productos.db` en el proyecto y sobrevive a l
 
 Bootstrap se carga desde jsDelivr y requiere acceso a internet desde el navegador. La API no consulta Oracle APEX.
 
+La interfaz CRUD y la API no tienen autenticación; ejecútalas solo en un entorno local o de confianza.
+
 ## Cargar productos
 
 `sql/esquema.sql` define los seis objetos de la base: roles, usuarios, categorías, proveedores, productos y movimientos. Se ejecuta automáticamente al iniciar la aplicación.
@@ -58,7 +60,7 @@ Para cargar los datos de ejemplo, ejecuta una sola vez el script SQLite `sql/pro
 docker compose exec api python -m app.ejecutar_sql /app/sql/productos.sql
 ```
 
-El script se ejecuta contra `data/productos.db`. Si quieres cargar tu inventario real, edita sus sentencias `INSERT` antes de ejecutarlo. La tabla web muestra productos activos, incluyendo categoría, proveedor, unidad, precio de venta y stock. Consulta [`docs/sqlite.md`](docs/sqlite.md) para más detalles.
+El script se ejecuta contra `data/productos.db`. Si quieres cargar tu inventario real, edita sus sentencias `INSERT` antes de ejecutarlo. La tabla web muestra productos activos e inactivos, incluyendo categoría, proveedor, unidad, precio de venta y stock. Consulta [`docs/sqlite.md`](docs/sqlite.md) para más detalles.
 
 Si ya existía una base de la versión previa y tenía productos, la aplicación no borra ni convierte automáticamente esos registros: detiene el arranque e indica que debes hacer una copia y migrarlos. La tabla antigua vacía se sustituye automáticamente por el nuevo esquema.
 
@@ -74,4 +76,8 @@ Las pruebas usan bases de datos temporales y no necesitan conexión a internet n
 
 | Método | Ruta | Acción |
 | --- | --- | --- |
-| GET | `/productos` | Listar los productos activos guardados en SQLite |
+| GET | `/productos` | Listar productos |
+| GET | `/productos/{id}` | Consultar un producto |
+| POST | `/productos` | Crear un producto |
+| PUT | `/productos/{id}` | Actualizar un producto |
+| DELETE | `/productos/{id}` | Eliminar un producto |
